@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: mapringg/standard/.github/actions/check-pr@2da38877f9f3361e0847f11aa0c7b581163b6b10 # v1.11.0
+      - uses: mapringg/standard/.github/actions/check-pr@28dff962ef8ca9f8f1f275ac60cee68ed56372af # v1.13.0
       - run: bash -n bin/phone
       - name: Keep phone data out of git
         run: |
