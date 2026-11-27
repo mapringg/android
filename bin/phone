@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -uo pipefail
+export LC_ALL=C
+cd "$(dirname "$(readlink -f "$0")")/.."
+A=platform-tools/adb
+[ -x $A ] || { curl -fsSLo /tmp/pt.zip https://dl.google.com/android/repository/platform-tools-latest-linux.zip && unzip -qo /tmp/pt.zip && rm /tmp/pt.zip; } || exit 1
+sh() { $A shell "$@" </dev/null | tr -d '\r'; }
+has() { grep -qxF "$1" "$S/$2.txt"; }
+want() { cat "desired/$1" "private/$1" 2>/dev/null; }
+
+# snapshots/ and private/ never enter git: each lives in 1Password as one tarball.
+pull() {
+  local d t
+  for d in snapshots private; do
+    [ -d $d ] && continue
+    t=$(mktemp -d)
+    secret restore mapringg.android.$d "$t/$d.tgz" >&2 && tar xzf "$t/$d.tgz" || echo "No $d in 1Password yet" >&2
+    rm -rf "$t"
+  done
+}
+push() {
+  local t
+  t=$(mktemp -d)
+  tar czf "$t/$1.tgz" "$1" && secret save mapringg.android.$1 "$t/$1.tgz" >&2
+  rm -rf "$t"
+}
+
+snap() {
+  $A get-state >/dev/null 2>&1 || { echo "No device" >&2; return 1; }
+  local d=snapshots/$(date +%Y-%m-%d-%H%M%S)${1:+-$1}
+  mkdir -p "$d"
+  for ns in global secure system; do sh settings list $ns | sort >"$d/settings_$ns.txt"; done
+  for f in e:enabled d:disabled 3:thirdparty u:all_incl_uninstalled; do sh pm list packages -${f%%:*} | sed 's/^package://' | sort >"$d/pkgs_${f#*:}.txt"; done
+  comm -23 "$d/pkgs_all_incl_uninstalled.txt" <(sort "$d/pkgs_enabled.txt" "$d/pkgs_disabled.txt") >"$d/pkgs_removed_user0.txt"
+  sh getprop | grep -E 'ro.build.display.id|ro.build.version|ro.product.model|density|ota.version' >"$d/props.txt"
+  { sh wm density; sh wm size; } >"$d/display.txt"
+  for r in DIALER SMS BROWSER; do sh cmd role get-role-holders android.app.role.$r | sed "s/^/$r=/"; done >"$d/roles.txt"
+  sh cmd appops query-op RUN_ANY_IN_BACKGROUND allow | sort >"$d/bg_allowed.txt"
+  sh dumpsys notification | awk '/AppSettings: /{p=$2} /NotificationChannel\{/ && /mImportance=0,/{match($0,/mId=.[^,]*/); print p, substr($0,RSTART+5,RLENGTH-6)}' | sort -u >"$d/notif_channels_off.txt"
+  ls -d snapshots/2*/ | grep -v baseline | head -n -15 | xargs -r rm -rf
+  push snapshots
+  echo "$d"
+}
+
+changes() {
+  local o=snapshots/$(basename "$1") n=snapshots/$(basename "$2")
+  echo "== $(basename "$o") -> $(basename "$n")"
+  for ns in global secure system; do
+    join -t $'\x01' -a1 -a2 -e '<none>' -o 0,1.2,2.2 <(sed 's/=/\x01/' "$o/settings_$ns.txt" | sort -t $'\x01' -k1,1) <(sed 's/=/\x01/' "$n/settings_$ns.txt" | sort -t $'\x01' -k1,1) |
+      awk -F'\x01' -v ns=$ns '$2!=$3{print ns"/"$1": "substr($2,1,80)" -> "substr($3,1,80)}' | grep -vEf desired/noise.txt
+  done
+  for f in pkgs_enabled pkgs_disabled pkgs_removed_user0 pkgs_thirdparty bg_allowed notif_channels_off roles display; do
+    [ -f "$o/$f.txt" ] && [ -f "$n/$f.txt" ] && diff "$o/$f.txt" "$n/$f.txt" | sed -n "s/^</$f: -/p; s/^>/$f: +/p"
+  done
+}
+
+plan() {
+  while IFS=$'\t' read -r ns k want ui; do
+    have=$(grep -m1 "^$k=" "$S/settings_$ns.txt" | cut -d= -f2-)
+    [ "$have" = "$want" ] && continue
+    if [ -n "$ui" ]; then echo "UI $ns/$k=$want (now ${have:-unset})"; else echo "settings put $ns $k '$want'"; fi
+  done < <(want settings.tsv)
+  while read -r p; do has $p pkgs_enabled || has $p pkgs_disabled && echo "pm uninstall --user 0 $p"; done < <(want packages-removed.txt)
+  while read -r p; do has $p pkgs_enabled || echo "cmd package install-existing $p"; done < <(want packages-required.txt)
+  while read -r p; do has $p pkgs_enabled && echo "pm disable-user --user 0 $p"; done < <(want packages-disabled.txt)
+  while read -r p; do has $p bg_allowed || ! has $p pkgs_enabled || echo "cmd appops set $p RUN_ANY_IN_BACKGROUND allow"; done < <(want bg-allowed.txt)
+  while read -r p c; do grep -qxF "$p $c" "$S/notif_channels_off.txt" || ! has $p pkgs_enabled || echo "UI notification channel off: $p $c"; done < <(want notif-off.txt)
+  for r in DIALER=com.android.contacts SMS=com.android.mms; do has $r roles || echo "cmd role add-role-holder android.app.role.${r%=*} ${r#*=} 0"; done
+  grep -qE 'allowRepeatCallers=true|manualRule=.*repeatCallers=allow' <<<"$(sh dumpsys notification)" || echo "UI Do Not Disturb: repeat callers on"
+  grep -q disabled <<<"$(sh bmgr enabled)" || echo "UI Google Backup off"
+  comm -13 <(want apps-known.txt | sort) "$S/pkgs_thirdparty.txt" | sed 's/^/UI new app, keep in apps-known.txt or remove: /'
+  comm -23 <(want apps-known.txt | sort) "$S/pkgs_thirdparty.txt" | sed 's/^/UI known app gone: /'
+}
+
+smoke() {
+  for p in com.oplus.camera com.coloros.gallery3d com.android.contacts com.android.mms com.coloros.alarmclock com.coloros.filemanager com.coloros.calculator; do
+    sh monkey -p $p -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+    sleep 2.5
+    echo "launch $p -> $(sh dumpsys activity activities | grep -m1 -oE 'topResumedActivity=[^ ]+ [^ ]+ [^ ]+' | awk '{print $3}')"
+    sh input keyevent HOME
+    sleep 0.5
+  done
+  for p in com.android.systemui com.android.launcher; do sh pidof $p >/dev/null || echo "$p DOWN"; done
+  $A logcat -d -b crash | sed -n 's/.*Process: //p' | sort | uniq -c
+  $A logcat -d -b main,system,events | grep -E 'ANR in|am_anr' | head
+}
+
+ui() {
+  sh uiautomator dump /sdcard/ui.xml >/dev/null
+  case $1 in
+    dump) sh cat /sdcard/ui.xml | grep -oE '(text|content-desc)="[^"]+"|checked="true"' ;;
+    tap)
+      set -- $(sh cat /sdcard/ui.xml | grep -oE "text=\"$2\"[^>]*bounds=\"[^\"]+\"" | head -1 | grep -oE 'bounds="[^"]+"' | grep -oE '[0-9]+')
+      [ $# = 4 ] || { echo "not found"; return 1; }
+      sh input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
+      sleep 1.5 ;;
+    shot) mkdir -p shots && $A exec-out screencap -p >"shots/$2.png" ;;
+  esac
+}
+
+set -- "${1:-check}" "${@:2}"
+[ "$1" = save ] || pull
+case $1 in
+  save) push private ;;
+  snap) snap "${@:2}" ;;
+  diff) changes "${2:-$(ls -d snapshots/2*/ | tail -2 | head -1)}" "${3:-$(ls -d snapshots/2*/ | tail -1)}" ;;
+  smoke) smoke ;;
+  ui) ui "${@:2}" ;;
+  check | fix)
+    prev=$(ls -d snapshots/2*/ | tail -1)
+    S=$(snap "$1") || exit 1
+    changes "$prev" "$S"
+    echo "== drift"
+    P=$(plan)
+    [ -z "$P" ] || echo "$P"
+    F=$(grep -v '^UI ' <<<"$P")
+    if [ "$1" = fix ] && [ -n "$F" ]; then
+      read -rp "Apply the commands above? [y/N] " y </dev/tty && [ "$y" = y ] || exit 1
+      grep -q '^pm uninstall' <<<"$F" && $A logcat -c
+      while read -r c; do echo "$c :: $(sh "$c")"; done <<<"$F"
+      grep -q install-existing <<<"$F" && echo "Open restored apps once; after restoring Clock, toggle the alarm"
+      grep -q '^pm uninstall' <<<"$F" && smoke
+      changes "$S" "$(snap fixed)"
+    fi
+    [ "$(sh settings get global development_settings_enabled)" != 1 ] || echo "Turn Developer options off when done: banking apps refuse to run"
+    ;;
+  *) echo "usage: phone [check|fix|snap [label]|diff [old new]|save|smoke|ui dump|tap <text>|shot <name>]" >&2; exit 1 ;;
+esac

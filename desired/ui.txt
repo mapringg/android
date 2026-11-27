@@ -1,0 +1,12 @@
+Default browser Chrome, keyboard Gboard
+Gboard: all four privacy toggles off
+Display: resolution High, refresh rate Auto select, Adaptive tone on
+Font: OPPO Sans, contour glow off
+Icons: ColorOS Classic, no icon pack
+Status bar: battery percentage on
+Always-On Display off
+Quick Settings: Wi-Fi, mobile data, Bluetooth, media, brightness/volume, flashlight, DND, auto-rotate, airplane, location, hotspot, power saving, Quick Share, Wallet, screen recording
+O-Haptics on, medium
+Google: Contacts and Calendar sync off, personalize using shared data off, Fast Pair scanning off, usage and diagnostics off, advertising ID deleted
+Location Accuracy on
+Developer options off

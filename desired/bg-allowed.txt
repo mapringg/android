@@ -1,0 +1,2 @@
+com.coloros.alarmclock
+com.coloros.filemanager

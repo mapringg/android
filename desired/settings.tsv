@@ -1,0 +1,47 @@
+global	window_animation_scale	1.0
+global	transition_animation_scale	1.0
+global	animator_duration_scale	1.0
+global	wifi_scan_always_enabled	0
+global	ble_scan_always_enabled	0
+global	recommend_install_switch	0
+global	power_sounds_enabled	0
+global	stay_on_while_plugged_in	0
+global	hide_silent_noti_icon	1
+global	wifi_use_technical_standard_icons_switch_on	0
+global	oplus_customize_system_stable_plan_switch	0
+global	dark_mode_state	1
+secure	app_recommend_channel	0
+secure	lock_screen_allow_private_notifications	0
+secure	charging_sounds_enabled	0
+secure	charging_vibration_enabled	0
+secure	disable_front_finger_sound	1
+secure	disable_screen_capture_sound	1
+secure	global_delete_sound	0
+secure	icon_blacklist	rotate,ime,nfc,data_saver,show_network_speed,vpn,volte,alarm_clock,vowifi
+secure	badge_type_global	3	ui
+secure	one_handed_mode_enabled	0
+secure	notification_bubbles	0
+system	lock_screen_notification_style	1	ui
+secure	oplus_shutdown_need_verification_password	1	ui
+secure	oplus_customize_color_mode	11	ui
+secure	display_density_forced	476	ui
+secure	setting_app_startup_anim_speed	1	ui
+secure	oplus_customize_gesture_wake_up_arouse	1	ui
+secure	double_tap_power_button_gesture_enabled	1	ui
+secure	oplus_third_part_apps_predictive_back	1	ui
+system	display_density_index_manual	1	ui
+system	font_variation_settings	4675	ui
+system	font_scale	1.0
+system	system_material_blur_enable	1	ui
+system	animationBlurrySwitch	1	ui
+system	oplus_action_button_switch_state	ring_mode	ui
+system	data_statistics_switch	0
+system	oplus_customize_cta_user_experience	0
+system	oplus_customize_cta_update_pictorial	0
+system	sound_effects_enabled	0
+system	lockscreen_sounds_enabled	0
+system	dtmf_tone	0
+system	power_on_sound	0
+system	power_off_sound	0
+system	setting_zoomwindow_open_from_share	0
+system	super_power_save_desktop_app_list	[{"packageName":"com.android.contacts","user":0},{"packageName":"com.android.mms","user":0},{"packageName":"com.coloros.alarmclock","user":0}]

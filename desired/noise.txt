@@ -1,0 +1,5 @@
+_time:|_timestamp|last_screenoff|click_open_app
+kgd_unlock_count|unlock_count
+screen_brightness|face_fill_screen_brightness
+live_alert_lock_state
+boot_count|uptime|_count: 

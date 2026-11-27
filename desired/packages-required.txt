@@ -1,0 +1,10 @@
+com.android.contacts
+com.android.mms
+com.coloros.alarmclock
+com.coloros.calculator
+com.coloros.filemanager
+com.coloros.gallery3d
+com.coloros.phonemanager
+com.coloros.weather.service
+com.google.android.apps.safetyhub
+com.oplus.eyeprotect
